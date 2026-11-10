@@ -1,0 +1,46 @@
+# ---- Secrets (NEVER commit these) -------------------------
+.env
+*.env
+!.env.example
+!frontend/.env.example
+
+# ---- Java / Maven ------------------------------------------
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+
+# ---- Node / Frontend ---------------------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ---- Python ------------------------------------------------
+backend/app/__pycache__/
+backend/app/*.pyc
+backend/app/.venv/
+backend/app/venv/
+backend/app/chroma_db/
+
+# ---- Uploads (runtime files, not source) -------------------
+backend/uploads/*.pdf
+backend/uploads/*.docx
+backend/uploads/*.txt
+backend/uploads/*.png
+backend/uploads/*.jpg
+
+# ---- IDEs --------------------------------------------------
+.idea/
+*.iml
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# ---- Logs --------------------------------------------------
+*.log
+logs/
+node_modules/
+frontend/node_modules/
+backend/target/
+.env

@@ -1,0 +1,51 @@
+# ============================================================
+# Docker build context exclusions
+# ============================================================
+
+# Git
+.git
+.gitignore
+
+# Secrets
+.env
+*.env
+!.env.example
+
+# Node
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Java build artefacts
+backend/target
+backend/.mvn
+
+# Python
+backend/app/__pycache__
+backend/app/*.pyc
+backend/app/.venv
+backend/app/venv
+backend/app/chroma_db
+
+# Docs and reports
+docs/
+*.md
+ANALYSIS_REPORT.md
+
+# IDE
+.idea
+*.iml
+.vscode
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test output
+coverage/
+.nyc_output/

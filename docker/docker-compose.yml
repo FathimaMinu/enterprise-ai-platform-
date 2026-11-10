@@ -1,0 +1,133 @@
+# ============================================================
+# Enterprise AI Platform — Full Stack Docker Compose
+#
+# Usage:
+#   cp ../.env.example ../.env   # fill in secrets
+#   docker-compose up --build
+#
+# Services:
+#   postgres  :5432   — PostgreSQL database
+#   backend   :8080   — Spring Boot API
+#   ai        :8000   — Python FastAPI AI service
+#   frontend  :3000   — React (Nginx)
+# ============================================================
+
+version: "3.9"
+
+# ── Named volumes ─────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  chroma_data:
+    driver: local
+
+# ── Shared network ────────────────────────────────────────
+networks:
+  enterprise_net:
+    driver: bridge
+
+# ── Services ──────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: enterprise_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       enterpriseai
+      POSTGRES_USER:     ${SPRING_DATASOURCE_USERNAME:-enterpriseai}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - enterprise_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-enterpriseai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Backend ─────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: enterprise_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE:    prod
+      JWT_SECRET:                ${JWT_SECRET:?JWT_SECRET is required}
+      SPRING_DATASOURCE_URL:     jdbc:postgresql://postgres:5432/enterpriseai
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-enterpriseai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+      CORS_ALLOWED_ORIGINS:      ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      AI_SERVICE_URL:            http://ai:8000
+      OPENAI_API_KEY:            ${OPENAI_API_KEY:-}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "8080:8080"
+    networks:
+      - enterprise_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/test/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Python AI Service ───────────────────────────────────
+  ai:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+    container_name: enterprise_ai
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+      CHROMA_PATH:       /app/chroma_db
+      ALLOWED_ORIGINS:   http://localhost:3000,http://backend:8080
+      LOG_LEVEL:         info
+    volumes:
+      - chroma_data:/app/chroma_db
+      - uploads_data:/app/uploads:ro   # read-only access to uploaded files
+    ports:
+      - "8000:8000"
+    networks:
+      - enterprise_net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── React Frontend (Nginx) ──────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api}
+    container_name: enterprise_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - enterprise_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

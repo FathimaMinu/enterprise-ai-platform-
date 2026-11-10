@@ -1,0 +1,43 @@
+# ============================================================
+# Enterprise AI Platform — Spring Boot Backend
+# Multi-stage build: Maven build → slim JRE runtime
+# ============================================================
+
+# ── Stage 1: Build ────────────────────────────────────────
+FROM eclipse-temurin:17-jdk-alpine AS builder
+
+WORKDIR /build
+
+# Cache dependencies before copying source
+COPY pom.xml .
+RUN mvn dependency:go-offline -q 2>/dev/null || true
+
+# Copy source and build (skip tests — run in CI separately)
+COPY src ./src
+RUN mvn package -DskipTests -q
+
+# ── Stage 2: Runtime ──────────────────────────────────────
+FROM eclipse-temurin:17-jre-alpine AS runtime
+
+# Non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+WORKDIR /app
+
+# Copy built JAR from builder
+COPY --from=builder /build/target/*.jar app.jar
+
+# Upload directory (mount as volume in production)
+RUN mkdir -p /app/uploads
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget -qO- http://localhost:8080/api/test/health || exit 1
+
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-jar", "app.jar"]
